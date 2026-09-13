@@ -1,85 +1,81 @@
-# House Price Prediction — End‑to‑End (Ames Housing)
+# Estate Signal
 
-**Technologies:** Python 3.8+, pandas, numpy, matplotlib, seaborn, scikit-learn, SHAP, Streamlit  
-**Dataset:** Ames Housing (from Kaggle: *House Prices — Advanced Regression Techniques*).
+Production-style real-estate intelligence workspace built on the existing house-price ML pipeline.
 
-> This project mirrors the pipeline in your report: preprocessing → EDA → feature engineering → model training (Linear Regression, Random Forest, Gradient Boosting) → GridSearchCV tuning (Gradient Boosting) → explainability with SHAP → deployment via Streamlit.
+## What is included
 
----
+- Preserved Ames scikit-learn pipeline and training script.
+- Dataset adapter for `data/archive (1)/Houses Dataset`.
+- Archive metadata and property-image discovery.
+- Optional pretrained ResNet18 image embeddings with structured plus image late fusion.
+- FastAPI REST API for valuation, comparables, and investment analysis.
+- React + TypeScript frontend replacing Streamlit as the primary UI.
+- Transparent valuation ranges, assumptions, confidence, and decision-support scores.
+- Pytest coverage for services, validation, comparables, investment calculations, and API endpoints.
+- Docker Compose definitions for backend, frontend, and PostgreSQL.
+- Separate document-grounded RAG assistant with citations and legal-safety guardrails.
 
-## 1) Quick Start
+The archive contains 535 US properties with USD prices, ZIP codes, and four images per property. Rental and historical market calculations are shown as unavailable unless the required inputs are supplied. Results are decision support, not financial advice.
 
-### A. Create environment & install dependencies
+## Local development
+
 ```bash
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
+.venv\\Scripts\\activate
 pip install -r requirements.txt
+uvicorn backend.app.main:app --reload
 ```
 
-### B. Get the data
-Download **train.csv** and **test.csv** from Kaggle (Ames Housing) and put them in:
-```
-house_price_project/data/
-```
-Create the folder if needed.
+In another terminal:
 
-### C. Train models
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. API documentation is available at `http://localhost:8000/docs`.
+
+## RAG knowledge assistant
+
+Ingest the included general reference document before asking questions:
+
+```bash
+python -m rag.cli --documents rag/documents
+```
+
+The RAG API is available at `POST /api/v1/rag/query`, `POST /api/v1/rag/ingest`, and `GET /api/v1/rag/stats`. Set `OPENAI_API_KEY` to enable answer generation with retrieved context; without it, the system uses a conservative extractive fallback. Set `RAG_USE_HASH_EMBEDDINGS=true` for deterministic offline development, otherwise `sentence-transformers` uses `all-MiniLM-L6-v2`.
+
+Legal and transaction answers are general information only, include retrieved source citations, and state that requirements may depend on state or local jurisdiction. The assistant refuses to invent laws, thresholds, deadlines, or procedures absent from the indexed sources.
+
+## Existing ML pipeline
+
+The original pipeline remains available:
+
 ```bash
 python -m src.train_model --data_dir data --target SalePrice
 ```
-This will:
-- Clean/encode features
-- Train **LinearRegression**, **RandomForestRegressor**, **GradientBoostingRegressor**
-- Tune **GradientBoosting** with **GridSearchCV**
-- Evaluate on a hold‑out set
-- Save the best end‑to‑end pipeline to `artifacts/model_pipeline.joblib`
-- Save metrics to `artifacts/metrics.json`
 
-### D. Run the Streamlit app
+The API uses the preserved Ames model when its original feature schema is supplied. Otherwise it uses the archive's comparable-property estimate.
+
+## Train the multimodal model
+
+Install the vision dependencies from `requirements.txt`, then run:
+
 ```bash
-streamlit run src/app_streamlit.py
-```
-Open the shown URL to use the UI: input a few property details → get **real‑time predicted price** + **SHAP explanation**.
-
----
-
-## 2) Project Structure
-
-```
-house_price_project/
-├── artifacts/
-│   ├── model_pipeline.joblib          # saved end-to-end pipeline (preprocessor + model)
-│   └── metrics.json                   # train/test metrics
-├── data/                              # put Kaggle files here (train.csv, test.csv)
-├── src/
-│   ├── train_model.py                 # training & tuning script
-│   ├── app_streamlit.py               # deployment UI with SHAP
-│   └── utils.py                       # helpers: preprocessing, EDA snippets
-├── requirements.txt
-└── README.md
+python -m src.train_multimodal
 ```
 
----
+This downloads the pretrained ResNet18 weights on first use, averages embeddings across each property's available images, fuses them with bedrooms, bathrooms, area, and ZIP code, and saves `artifacts/multimodal_fusion.joblib`. The API automatically uses this artifact when image data is supplied.
 
-## 3) Notes
+## Docker
 
-- We **focus on a high‑signal subset** of Ames features for the app:
-  - Numerical: `LotArea, GrLivArea, TotalBsmtSF, FirstFlrSF, GarageCars, FullBath, YearBuilt`
-  - Categorical: `Neighborhood, HouseStyle, KitchenQual, ExterQual`
-- The training script uses exactly these columns to keep training and app in sync (you can extend easily).
-- SHAP is computed with a **TreeExplainer** for the tuned Gradient Boosting model.
-- Metrics include **MAE**, **RMSE**, **R²** for both validation and test splits.
+```bash
+docker compose up --build
+```
 
----
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- PostgreSQL: `localhost:5432`
 
-## 4) Troubleshooting
-- If SHAP plot doesn’t render on some systems, ensure `matplotlib` is up to date and re‑run.
-- If memory is low during GridSearch, reduce the grid in `train_model.py` (`param_grid_gbr`).
-
----
-
-
+PostgreSQL is provisioned for the persistence phase; the current MVP reads the archive directly so the existing data remains immediately usable.

@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://estate:estate@postgres:5432/estate
+    depends_on:
+      - postgres
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: estate
+      POSTGRES_PASSWORD: estate
+      POSTGRES_DB: estate
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
